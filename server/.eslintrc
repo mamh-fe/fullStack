@@ -1,0 +1,10 @@
+{
+  "extends": "eslint-config-egg",
+  "rules": {
+    "semi": ["error", "never"], // 不要求写分号， 并且是报错的状态
+    "indent":["off",2],
+    "quotes": [1, "single"], //使用单引号，提示是警告
+    // "quotes": [0, "double"] //使用双引号，关闭
+    "strict": [2, "never"]
+  }
+}
