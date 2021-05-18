@@ -1,7 +1,7 @@
 // 'use strict'
 const BaseController = require('./base')
 const svgCaptcha = require('svg-captcha')
-
+const fse = require('fs-extra')
 class UtilsController extends BaseController {
     async captcha() {
         const captcha = svgCaptcha.create({
@@ -37,6 +37,20 @@ class UtilsController extends BaseController {
         } else {
             this.message('发送失败2')
         }
+    }
+
+    async uploadFile() {
+        const {ctx} = this;
+        const file = ctx.request.files[0];
+        const {name} = ctx.request.body;
+        console.log('file 信息',name, file)
+
+        // 将默认的文件存储路径修改成自己想要存储的地方
+        await fse.move(file.filepath, this.config.UPLOAD_DIR + '/' + file.filename)
+
+        this.success({
+            url: `/public/${file.filename}`
+        })
     }
 }
 module.exports = UtilsController
