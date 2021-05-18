@@ -64,7 +64,7 @@ export default {
             form.append('file', this.file)   // 得到二进制
             const ret = await this.$http.post('/uploadFile', form, {
                 onUploadProgress: progress => {
-                   this.uploadProgress = Number((progress.loaded/progress.total)*100).toFixed(2)
+                   this.uploadProgress = Number(((progress.loaded/progress.total)*100).toFixed(2))
                 }
             })
         },
