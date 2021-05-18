@@ -66,13 +66,13 @@ export default {
                 // 还可以是来自在一个HTMLCanvasElement上执行mozGetAsFile()方法后返回结果。
                 const reader = new FileReader()
                 reader.onload = function() {
-                    console.log( '读取结果', reader.result);
+                    console.log( '读取结果', reader.result+"");
                     // 比如 gif 的  reader.result 是 GIF89a
                     const ret = reader.result.split('')  // 切割成单独的  ['G', 'I', 'F', '8', '9', 'a']
                                 .map(v => v.charCodeAt() )  // 每个都转成 10进制的 assic 码['71', ‘72’ ...])
                                 .map(v => v.toString(16).toUpperCase())  // 再转成 16进制，  ['47', ...]
                                 .map(v => v.padStart(2, '0'))  // 位数不够的情况补充0  , 不够两位的话， 从左侧开始填充0 到 2位
-                                .join('')  // 再转成字符串
+                                .join(' ')  // 再转成字符串
                     resolve(ret)
                 }
                 // readAsBinaryString 方法会读取指定的 Blob 或 File 对象，当读取完成的时候，readyState  会变成DONE（已完成）
@@ -86,18 +86,32 @@ export default {
             // 对应 GIF89a  和 GIF87a   就是把每个字符的16进制的asic 码拿出来
 
             // 16进制的转换  获取前6个字符  (将上传的前6位转成16进制然后和对应格式的比较， 一样则证明传的没问题)
+            // gif 的宽高也在这个留信息里边, 在 7-10?
             // 不是每种格式的都获取前6个
             const ret = await this.blobToString(file.slice(0,6))
             const isGif = (ret === '47 49 46 38 39 61') || (ret === '47 49 46 38 37 61')
-            console.log('==isGif', isGif);
             return isGif
 
+        },
+        async isPng(file) {
+            const ret = await this.blobToString(file.slice(0,8))
+            const isPng = (ret === '89 50 4E 47 0D 0A 1A 0A')
+            console.log('isPng', isPng)
+            return isPng
+        },
+
+        async isJpg(file) {
+            const len = file.size
+            const start = await this.blobToString(file.slice(0,2))
+            const end = await this.blobToString(file.slice(-2, len))
+            const isJpg = (start === 'FF D8') && (end === 'FFD(')
+            return isJpg
         },
         async isImage(file) {
             // 通过文件流来判断
             // 先判定gif
             // 读取文件是个异步的过程， 所以要加await， 不然结果可能永远是正确的
-            return await  this.isGif(file)
+            return await  this.isGif(file) ||  await this.isPng(file) || await this.isJpg(file)
         },
         async uploadFile() {
             // 注意是异步的
