@@ -3,13 +3,19 @@
         <h1>用户中心</h1>
         <div ref='drag' id='drag'>
 
-            <input type="file" name='file' @change = "handleFilteChange">
+            <input type="file" name='file' @change = "handleFileChange">
         </div>
         <div>
             <el-progress  :stroke-width = '20' :text-inside="true" :percentage='uploadProgress'></el-progress>
         </div>
         <div>
             <el-button @click="uploadFile">上传</el-button>
+        </div>
+        <div>
+            <div>计算hash 的进度</div>
+             <div>
+            <el-progress  :stroke-width = '20' :text-inside="true" :percentage='hashProgress'></el-progress>
+        </div>
         </div>
     </div>
 </template>
@@ -24,6 +30,7 @@
 </style>
 
 <script>
+const CHUNK_SIZE = 0.5*1024*1024;  //定义切片大小0.5M
 export default {
     async mounted() {
         const ret = await this.$http.get('/user/info')
@@ -34,7 +41,8 @@ export default {
     data() {
         return {
             file: null,
-            uploadProgress: 0
+            uploadProgress: 0,
+            hashProgress: 0
         }
     },
     methods: {
@@ -113,12 +121,51 @@ export default {
             // 读取文件是个异步的过程， 所以要加await， 不然结果可能永远是正确的
             return await  this.isGif(file) ||  await this.isPng(file) || await this.isJpg(file)
         },
+        createFileChunk(file, size = CHUNK_SIZE) {
+            const chunks = [];
+            let cur = 0;  // 游标
+            // 切file.size, 切成size 大小， 当如数组， 数组中用index 标记当前切片的应当位置 
+            while(cur < this.file.size) {
+                chunks.push({index: cur, file: this.file.slice(cur, cur*size)})
+                cur += size
+            }
+            return chunks;
+
+        },
+        // 计算md5 不占用主线程， 所以要将nodemodules 里边的spark-md5.min.js 文件拷贝到static 静态文件目录， 可以单独访问使用
+        async calculateHashWorker(){
+            return new Promise(resolve => {
+                // 会加载这个js, 以后的事情就交给他了， 一个全新的进程， 可以理解为一个分身
+                this.worker = new Worker('./hash.js')
+                // 给它数据
+                this.worker.postMessage({chunks: this.chunks})
+                // 回传数据
+                this.worker.onmessage = e => {
+                    const {progress, hash} = e.data;
+                    console.log('==progress, hash', progress, hash);
+                    this.hashProgress = Number(progress.toFixed(2))
+                    if(hash) {
+                        resolve(hash)
+                    }
+                }
+            })
+        },
+        async calculateHashIdle(){
+            
+        },
         async uploadFile() {
             // 注意是异步的
-            if(!await this.isImage(this.file)) {
-                alert('文件格式不对')
-                return
-            }
+            // if(!await this.isImage(this.file)) {
+            //     alert('文件格式不对')
+            //     return
+            // }
+            // 文件切片
+            this.chunks = this.createFileChunk()
+            console.log('===chunks', chunks)
+            const hash = await this.calculateHashWorker()  // 计算md5 尽量不要在主线程去做, 一种是用webworker, 一种是idle
+            const hash1 = await this.calculateHashIdle()
+            console.log('文件hash', hash);
+            return
             const form = new FormData()
             form.append('file', this.file)   // 得到二进制
             const ret = await this.$http.post('/uploadFile', form, {
@@ -127,7 +174,7 @@ export default {
                 }
             })
         },
-        handleFilteChange(e) {
+        handleFileChange(e) {
             const [file] = e.target.files
             console.log('==file', file);
             if(!file) return
