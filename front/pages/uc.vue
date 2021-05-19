@@ -30,7 +30,8 @@
 </style>
 
 <script>
-const CHUNK_SIZE = 0.5*1024*1024;  //定义切片大小0.5M
+const CHUNK_SIZE = 0.1*1024*1024;  //定义切片大小0.5M， // 改成0.1 方便测试
+import sparkMD5  from 'spark-md5'
 export default {
     async mounted() {
         const ret = await this.$http.get('/user/info')
@@ -151,7 +152,40 @@ export default {
             })
         },
         async calculateHashIdle(){
-            
+            const chunks = this.chunks;
+            return new Promise(resolve => {
+                // 计算一个实例数组
+                const spark = new sparkMD5.ArrayBuffer();
+                let count = 0;
+
+                const appendToSpark = async file => {
+                    const reader = new FileReader()
+                    reader.readAsArrayBuffer(file)
+                    reader.onload = e => {
+                        spark.append(e.target.result)
+                        resolve()
+                    }
+                }
+                
+                const workLoop = async deadline => {
+                    while(count < chunks.length && deadline.timeRemaining() > 1) {
+                        await appendToSpark(chunks[count].file)
+                        count++
+                        if(count < chunks.length) {
+                            this.hashProgress = Number(
+                                ((100*count)/chunks.length).toFixed(2)
+                            )
+                        }else {
+                            this.hashProgress = 100;
+                            resolve(spark.end())
+                        }
+                    }
+                    // 上述做完了没有空闲时间了， 启用下一次
+                    window.requestIdleCallback(workLoop)
+                }
+
+                window.requestIdleCallback(workLoop)
+            })
         },
         async uploadFile() {
             // 注意是异步的
@@ -161,10 +195,10 @@ export default {
             // }
             // 文件切片
             this.chunks = this.createFileChunk()
-            console.log('===chunks', chunks)
             const hash = await this.calculateHashWorker()  // 计算md5 尽量不要在主线程去做, 一种是用webworker, 一种是idle
             const hash1 = await this.calculateHashIdle()
             console.log('文件hash', hash);
+            console.log('文件hash1', hash1);
             return
             const form = new FormData()
             form.append('file', this.file)   // 得到二进制
